@@ -1,0 +1,779 @@
+---
+title: "Push Puppet Networks"
+subtitle: "A Structured Bayesian Pruning Algorithm for Language Model Compression"
+short-title: Push Puppet Networks
+published: "Preprint"
+code-repo: "Access the code, data, and analysis at <https://github.com/saudiwin/push_puppet>."
+correspondence-prefix: "Correspondence concerning this article should be addressed to"
+author:
+  - name: Robert Kubinec
+    email: bobkubinec@gmail.com
+    orcid: 0000-0001-6655-4119.
+    title: Associate Professor of Political Science
+    # affiliations: 
+    #   - id: ds9
+    #     name: Texas A&M University
+    #     department: Political Science
+    #     city: College Station
+    #     region: TX
+    #     country: USA
+    attributes:
+      corresponding: true
+abstract: |
+  This paper presents push puppet networks, a novel Bayesian algorithm for structured pruning of large language models. The push puppet network learns a hierarchical function during training that can optimally determine specific network layers to keep for a given target size. By adding a small number of gating parameters via a hierarchical penalty function, the learned smooth function can allow for a network to be resized to very specific sizes without loading the full model into memory or requiring further post-training computation. The method compares favorably with existing approaches (SparseGPT, Wanda) at high pruning sizes (less than 50% of network structure) while realizing measurable speed-ups on conventional GPUs with PyTorch. Furthermore, push puppet networks can achieve significant speedups as candidates for speculative decoding.^[I thank the National Science Foundation ACCESS program and Texas A&M's ACES cluster for computational resources for this project.]
+# thanks: |
+#   Placeholder text generated at <https://vlad-saling.github.io/star-trek-ipsum/>.
+# additional-info: |
+#   We have no known conflict of interest to disclose.
+keywords:
+  - Bayesian statistics
+  - large language models
+  - structured pruning
+date: 2026-06-25
+bibliography: references.bib
+execute: 
+  cache: false
+format:
+#  hikmah-pdf: default
+#  hikmah-typst: default
+#  hikmah-manuscript-pdf: default
+  hikmah-manuscript-typst: 
+    echo: false
+---
+
+## Conflicts of Interests
+
+The author has no conflicts of interests to declare.
+
+## AI Usage Statement
+
+Claude Code with Opus 4.8 was used for writing code to implement the models and ensured that the mathematical formal exposition matched the code. The author wrote the paper while Opus 4.8 provided feedback on the draft and checked the equations for consistency.
+
+{{< pagebreak >}}
+
+Sparse computation for large language models (LLMs) has become an important research endeavor given the high costs of running LLMs at scale. This paper presents a novel method for structured pruning of LLMs; that is, for compression that is realistic under contemporary hardware, in particular graphical processing units (GPUs) that work best with regular-sized matrices. This algorithm borrows its design from the idea of a push puppet, which is a child's doll that can disassemble and reassemble itself in response to the varying pressure of a string. The string in this context is a smooth learned hyper-function (i.e., a Bayesian prior) that contains information as to which neurons contain the most information for a given sparsity level. This function permits structured pruning from very minor sparsity to almost complete sparsity (up to only 5% of model layers remaining).
+
+Relative to existing methods like sparseGPT [@frantar2023] and Wanda [@sun2024], this method implements structured pruning, and such, it does not require custom kernels for sparse computation beyond what is available in platforms like PyTorch. Furthermore, as I show, this method is much more robust to degradation at high levels of sparsity (i.e., below 40%), which makes it an ideal method for designing target models for speculative decoding. Furthermore, because the pruning method is known *before* the model is loaded into memory, the method avoids memory bottle necks associated with sparseGPT and Wanda that require the model to be loaded in memory before pruning.
+
+In this paper, I compare the algorithm's performance on training data from the Olmo-3 project [@olmo2026] for a model of 1.3b parameters. Furthermore, I show how this algorithm permits much more flexible speculative decoding, which enables users to employ speculative decoding on consumer-grade hardware [@leviathan2023].
+
+## Algorithm Definition
+
+This method relies on Bayesian concepts, especially that of an informative prior [@gelman2013], to identify a more flexible form of sparse computation. While many pruning methods are done after a model is trained in order to prune it to a certain size [@lee2026], such as Wanda [@sun2024], sparseGPT [@frantar2023], and model distillation [@lee2026], this method seeks to learn a *continuous* function of optimal sparsity. To do so, I employ a parameter $\lambda$ that represents the cost of computation and vary this parameter during the training period according to the following distribution:
+
+$$\lambda \sim \text{Exponential}(0.3)$$ {#eq-lambda}
+
+For each step of the stochastic optimization procedure, a new value of $\lambda$ is drawn so that the model can adjust to the full range of possibilities from very small values of $\lambda$ to relatively large values. Because the draws of $\lambda$ are stochastic over batches of data in gradient descent, the model must learn to be robust to any plausible value of $\lambda$ given that the penalty function is jointly estimated with the model parameters.
+
+The specific penalty function for $\lambda$ as the cost of computation will vary according to the particular model architecture. In the mathematical formulation that follows, I assume a deep neural network of reasonable complexity with a transformer architecture and an attention layer that follows @olmo2026. Specifically, we can begin with an autoregressive transformer with $L$ blocks, vocabulary size $V$, model dimension $d$, $H$ attention heads, and FFN intermediate dimension $d_{\text{ff}}$.
+
+Given an input token sequence $\mathbf{u} = (u_1, \ldots, u_T)$, we start with an embedding layer defined as:
+
+$$\mathbf{x}_0 = \mathbf{E}[\mathbf{u}] + \mathbf{P}$$ {#eq-embed}
+
+where $\mathbf{E} \in \mathbb{R}^{V \times d}$ is the token embedding matrix and $\mathbf{P} \in \mathbb{R}^{T \times d}$ is the learned positional embedding.
+
+The FFN layer uses a SwiGLU activation with three projection matrices:
+
+$$\text{FFN}(\mathbf{x}) = \mathbf{W}^{\text{down}} \left(\text{SiLU}(\mathbf{W}^{\text{gate}}\mathbf{x}) \odot \mathbf{W}^{\text{up}}\mathbf{x}\right)$$ {#eq-ffn}
+
+with $\mathbf{W}^{\text{gate}}, \mathbf{W}^{\text{up}} \in \mathbb{R}^{d_{\text{ff}} \times d}$ and $\mathbf{W}^{\text{down}} \in \mathbb{R}^{d \times d_{\text{ff}}}$.
+
+$Q$, $K$, $V$ are projected separately from the input and split across $H$ heads with head dimension $d_h = d/H$. Per-head RMSNorm is applied to $Q$ and $K$ after projection:
+
+$$\mathbf{Q} = \text{Norm}_h \left(\mathbf{x}\,(\mathbf{W}^Q)^\top\right), \quad
+  \mathbf{K} = \text{Norm}_h \left(\mathbf{x}\,(\mathbf{W}^K)^\top\right), \quad
+  \mathbf{V} = \mathbf{x}\,(\mathbf{W}^V)^\top, \text{ } $$ {#eq-qkv1} $$\quad \mathbf{W}^Q, \mathbf{W}^K, \mathbf{W}^V \in \mathbb{R}^{d \times d}$$ {#eq-qkv2}
+
+where $\text{Norm}_h$ is RMSNorm applied independently to each head's $d_h$-dimensional slice.
+
+$$\text{Attn}(\mathbf{x}) = \text{concat}_{h=1}^{H}\left[
+  g(\left(\frac{\mathbf{Q}_h\mathbf{K}_h^\top}{\sqrt{d_h}}
+  + \mathbf{M}_{\text{causal}}\right)\mathbf{V}_h )
+\right]\mathbf{W}^O, \quad \mathbf{W}^O \in \mathbb{R}^{d \times d} $$ {#eq-attn}
+
+where $\mathbf{M}_{\text{causal}}$ is the upper-triangular $-\infty$ mask stored as a fixed buffer and $g(\cdot)$ is the softmax function.
+
+The intention of this model definition is to represent a relatively generic formulation that matches recent large language models in production. To incorporate our computational cost parameter $\lambda$, we add a separate penalty function to the calculation of cross-entropy loss $NLL$:
+
+$$\mathcal{L} = \text{NLL}_{\text{eff}} + \lambda \cdot \bar{\rho}(\lambda)$$ {#eq-loss}
+
+where $\text{NLL}_{\text{eff}}$ is the scaled cross-entropy loss and $\bar{\rho}(\lambda)$ is the weighted mean inclusion probability of the attention and FFN layers. Importantly, $\lambda$ sets the level of the penalty exogenously as a draw from the exponential distribution *and* affects the probability of parameter inclusion $\bar{\rho}(\lambda)$. This multiple influence of $\lambda$ on the training objective is what permits the algorithm to adjust to very high and very low penalties effectively.
+
+In order to make the penalty equal a computational cost, the penalty is weighted by the relative computational burden of different components of the model. Specifically, the normalized penalty is:
+
+$$\bar{\rho} = \frac{\sum_\ell w_{\text{ffn}} \bar{\rho}^{\text{ffn}}_\ell + \sum_\ell w_{\text{attn}} \bar{\rho}^{\text{attn}}_\ell}{\sum_\ell w_{\text{ffn}} + \sum_\ell w_{\text{attn}}}$$ {#eq-penalty}
+
+where the FFN weight $w_{\text{ffn}}$ is $6 \cdot d \cdot d_{\text{ff}}$ and the attention weight $w_{\text{attn}}$ is $8 \cdot d^2$. The factor of $6$ reflects the three SwiGLU projection matrices (gate, up, and down), each contributing $2 \cdot d \cdot d_{\text{ff}}$ multiply-accumulate operations; $w_{\text{attn}} = 8 d^2$ reflects the four attention projections ($Q$, $K$, $V$, and output).
+
+In addition to these weights, what drives the penalty is the inclusion probability $\rho(\cdot)$ for a given row/layer of the FFN and attention components where the weight matrix for each type has one row per intermediate neuron.
+
+The $\ell_2$ norm of each row measures how much that neuron can contribute to the output:
+
+$$r_i = \|\mathbf{w}_i\|_2, \quad i = 1, \ldots, d_{ff}$$ {#eq-rownorm}
+
+so that important neurons receive a higher inclusion probability via the inclusion function $\rho_i(\lambda)$:
+
+$$\rho_i(\lambda) = \sigma \left(\frac{r_i - \tau(\lambda)}{T}\right)$$ {#eq-rho}
+
+where $\sigma$ is the logistic function and $T > 0$ is a fixed temperature controlling the sharpness of the inclusion threshold (in the implementation $T = 0.5$).
+
+If $r_i$ is high, then the inclusion probability for that row increases. The inclusion function is an analogue of the item-response theory parameterization [@kubinec2026] except that $\lambda$ is set exogenously rather than learned. Importantly, *either* the row can be important or the the $\tau(\cdot)$ function can be low to allow a given row in the weight matrix to be included in the model. Consequently, there are two distinct mechanisms through which the model can adjust to computational costs. This learned flexibility is crucial to allow the network to self-prune while minimizing loss in predictive performance.
+
+## The $\tau$ function
+
+The $\tau(\lambda)$ is a crucial part of this model as it represents the partially learned, partially exogenous barrier to parameter inclusion. As such, this function must be carefully parameterized to avoid corner solutions, such as very low values where all parameters are included or none are included. Furthermore, the function must have a monotonicity restriction to prevent the function from paradoxically shrinking and re-growing the network in response to increasing $\lambda$, which does not fit with the idea of $\lambda$ as a computational cost parameter.
+
+As such, a monotone third-order B-spline formulation is imposed on $\tau(\lambda)$ to allow for non-linear flexibility while also requiring smoothness. In other words, higher $\lambda$ values need to reduce the inclusion probabilities of rows in the weight matrices even if there may be points in the function that are slowly increasing or nearly flat. To create a monotone B-spline, the coefficients need to be transformed so that each coefficient is strictly greater than the previous one (i.e., the softplus transformation).
+
+Each layer in the network has a separate B-spline function $\tau^{(\ell)}(\lambda)$ with $n_{\text{knots}} = 10$ control points, of which $n_{\text{knots}}-1 = 9$ are learnable. The first control point is fixed to $-1/T$ (using the same temperature as @eq-rho); at $\lambda=0$ this places the threshold well below any typical row norm, ensuring all neurons are included. The remaining 9 coefficients are built by cumulative sum of softplus-transformed increments:
+
+$$c_0 = -\frac{1}{T} \quad (\text{fixed}), \qquad
+c_k = c_{k-1} + \text{softplus}(\theta_k), \quad k = 1,\ldots,9$$ {#eq-spline-coef}
+
+The threshold for each neural head is the B-spline evaluated at these 10 control points:
+
+$$\tau^{(\ell)}(\lambda) = B^{(\ell)}\left(\frac{\lambda}{\lambda + 1}\right)$$ {#eq-tau}
+
+As will be shown later, this function is non-linear but still tractable and adds relatively little computational overhead. With the B-spline function, the model learns the optimal inclusion probability for each row $i$ in the FFN and attention weight matrices that is a function of *both* the row importance and the $\lambda$-influenced $\tau^{(\ell)}(\lambda)$ value. By so doing, the model can better avoid performance degradation as $\lambda$ increases by ensuring the most important neurons are included in the model.
+
+## Amplitude and Input Scaling
+
+The final step of the $\lambda$ penalty is to include a scaling function that can adjust the amplitude and direction of the weights in the model depending on their probability of inclusion. This step helps the model compensate for some neurons being dropped from computation, and provides an additional mechanism through which the model can adjust to varying computational costs.
+
+For FFN layers, each layer learns three independent amplitude corrections. Each uses its own monotone B-spline $u^{(\cdot)}(\lambda)$ initialized to approximate the rational map $\lambda/(\lambda+1)$ and trained jointly with all other parameters:
+
+$$f^{\text{gate}}_i(\lambda) = e^{\,s^{\text{gate}}_i \cdot u^{\text{gate}}(\lambda)}, \quad
+f^{\text{scale}}_i(\lambda) = e^{\,s^{\text{out}}_i \cdot u^{\text{scale}}(\lambda)}, \quad
+f^{\text{input}}_j(\lambda) = e^{\,s^{\text{in}}_j \cdot u^{\text{input}}(\lambda)}$$ {#eq-scale}
+
+where $s^{\text{gate}}, s^{\text{out}} \in \mathbb{R}^{d_{\text{ff}}}$ are per-neuron scalars and $s^{\text{in}} \in \mathbb{R}^{d}$ is a per-input-dimension scalar.
+
+The effective weight of the gate matrix at inference uses the output scale $f^{\text{scale}}$ and input scale $f^{\text{input}}$:
+
+$$w^{\text{eff}}_{ij}(\lambda) = w_{ij} \cdot m_i \cdot f^{\text{scale}}_i(\lambda) \cdot f^{\text{input}}_j(\lambda)$$ {#eq-weff}
+
+Because $f^{\text{input}}$ varies across input dimensions the correction is a separable (rank-1) matrix $f^{\text{scale}} (f^{\text{input}})^\top$. This allows the model to modulate both the magnitude and direction of surviving neurons, which is similar in spirit to the Hessian correction in SparseGPT.
+
+The inclusion probability uses the gate scale $f^{\text{gate}}$, which is a separate learned parameter from $f^{\text{scale}}$:
+
+$$\rho_i(\lambda) = \sigma \left(\frac{f^{\text{gate}}_i(\lambda) \cdot \|w_i^{\text{gate}} \odot f^{\text{input}}(\lambda)\|_2 - \tau^{(\ell)}(\lambda)}{T}\right)$$ {#eq-rho-hyper}
+
+where $w_i^{\text{gate}}$ is the $i$-th row of $\mathbf{W}^{\text{gate}}$. The extra parameters are $2d_{\text{ff}} + d$ scalars per FFN layer plus three B-spline parameter vectors ($n_{\text{knots}}$ values each), which represents relatively few parameters compared to a deep network of any appreciable size.
+
+Attention heads use the same two-role split as FFN layers but without input-direction scaling:
+
+$$f^{\text{gate}}_h(\lambda) = e^{\,s^{\text{gate}}_h \cdot u^{\text{gate}}(\lambda)}, \quad f^{\text{scale}}_h(\lambda) = e^{\,s^{\text{out}}_h \cdot u^{\text{scale}}(\lambda)}$$ {#eq-attn-scale}
+
+with inclusion probability $\rho_h(\lambda) = \sigma \left(\frac{\|\text{head}_h\|_F \cdot f^{\text{gate}}_h(\lambda) - \tau^{(\ell)}(\lambda)}{T}\right)$, and effective head outputs scaled by $f^{\text{scale}}_h(\lambda)$.
+
+## Training
+
+Training optimizes the model jointly with the $\lambda$ penalty functions by minimizing the combined loss (@eq-loss). In order to train the model to drop neurons, at each forward pass a 0/1 mask $m_i$ is drawn from a Bernoulli distribution where $p = \rho_i$ as defined in @eq-rho given the sampled value of $\lambda$, that is, the estimated inclusion probability:
+
+$$m_i \sim \text{Bernoulli}(\rho_i), \quad m_i \in \{0, 1\}$$ {#eq-mask}
+
+A straight-through estimator (STE) is used to create a continuous gradient given the hard mask:
+
+$$\tilde{m}_i = m_i + (\rho_i - \rho_i^{\,\text{sg}})$$ {#eq-ste}
+
+where $(\cdot)^{\text{sg}}$ denotes stop-gradient. This creates a hard effective mask $\tilde{m}_i = m_i$ for the forward pass and a smooth $\partial \tilde{m}_i / \partial \rho_i = 1$ gradient in the backward pass. The cross-entropy $\text{NLL}_{\text{eff}}$ is the standard token-level cross-entropy loss computed over all tokens regardless of the mask, which encourages the model to balance the $\lambda$ penalty and predictive performance. Surviving neurons have their output amplitude adjusted by $f^{\text{scale}}_i(\lambda)$.
+
+In order to train the model for full performance, $\frac{1}{3}$ of training steps are given $\lambda=0$ while the other $\frac{2}{3}$ of steps receive $\lambda$ from the exponential distribution at the specified rate. This process ensures that the model is able to continuously prune from maximal to minimal performance conditional on $\lambda$.
+
+Otherwise, training proceeds with an AdamW optimizer ($\beta_1=0.9$, $\beta_2=0.95$, weight decay $0.1$) with cosine learning rate decay.
+
+## Inference
+
+To enable structured pruning to a specific size, the user must first choose a $\lambda$ value, which is then passed to the B-spline functions (both for inclusion probability and amplitude correction). Once the inclusion probability is calculated, a sample of weight rows $r_i$ is drawn ($m_i$), and then the model is structurally pruned so that only surviving rows $r_i$ are stored in memory for both FFN layers and attention heads. This can be done before a model is loaded into memory to avoid hitting memory bottlenecks in either GPUs or CPUs.
+
+In order to determine the size of a model conditional on $\lambda$, the fitted model must be pruned at varying sizes of $\lambda$ to determine the expected surviving parameter counts. However, once that relationship is estimated, it is trivial to select a $\lambda$ value to obtain a sample of model weights that is equal to the expected size.
+
+At higher values of $\lambda$ and small expected parameter counts, prediction error for the model will increase significantly and the stochastic nature of mask sampling $m_i$ will also increase. In that case, it is possible to sample multiple masks $m_i$ and average the model predictions to reduce uncertainty related to mask sampling (though multiple masks cannot be used to approach dense model performance).
+
+# Evaluation
+
+To evaluate the algorithm, I fit the previously described model to a sample of approximately 5 billion tokens from the Olmo-3 open dataset [@olmo2026]. All models use the OLMo-3 transformer architecture with $d=2048$, $H=16$ attention heads, $L=16$ layers, an FFN intermediate dimension of $d_{\text{ff}}=8192$, and a vocabulary of 100,278 tokens (approximately 1.3 billion total parameters), trained at a sequence length of 1,024. The model is trained for 3 epochs with $\lambda \sim \text{Exp}(0.3)$, sampling $\lambda=0$ (dense pass) with probability $\frac{1}{3}$ and $\lambda > 0$ with probability $\frac{2}{3}$. This model size is chosen so that size constraints matter but estimation is still within computational tractability. Given the model's relatively small size and limited training regime, results will focus on perplexity of token prediction rather than task-related benchmarks.
+
+```{=html}
+<!-- The `rank1_hyper_joint` specification matches what was previously described; the `dense` model is fit without any $\lambda$ thresholding to serve as a computational baseline. @tbl-variants also lists an additional planned variants — `rank1_hyper_ffn` only prunes the FFN layers as opposed to also pruning attention heads.
+
+::: {#tbl-variants}
+| Variant | $\tau$ parameterization | Gated components | Amplitude scaling |
+|------------------|------------------|------------------|------------------|
+| `dense` | — | None | — |
+| `rank1_hyper_ffn` | B-spline | FFN neurons | Yes |
+| `rank1_hyper_joint` | B-spline | FFN + attention heads | Yes |
+
+Model variants compared in the evaluation.
+::: -->
+```
+
+<!-- The following R code loads the JSON results file and creates plots of relative performance of the models in terms of size, FLOPs, and perplexity (PPL). -->
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(jsonlite)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+res <- fromJSON("../results/olmo3_mini1b_all/stochastic_results.json", simplifyDataFrame = FALSE)
+
+# Consistent colour palette and factor order across all figures
+pal <- c(
+  dense       = "#555555",
+  ffn_poly    = "#762a83",
+  joint_poly  = "#b35806",
+  full_joint  = "#4dac26",
+  rank1_hyper_ffn   = "#2166ac",
+  rank1_hyper_joint = "#e08214"
+)
+variant_levels <- c("dense", "rank1_hyper_ffn", "rank1_hyper_joint")
+
+# ── Extract lambda-sweep data for all variants ──
+sweep_df <- function(variant) {
+  rows <- res$lambda_sweep[[variant]]
+  data.frame(
+    variant    = variant,
+    lam        = sapply(rows, `[[`, "lam"),
+    ppl        = sapply(rows, `[[`, "ppl"),
+    ppl_std    = sapply(rows, `[[`, "ppl_std"),
+    ffn_frac   = sapply(rows, `[[`, "ffn_frac"),
+    attn_frac  = sapply(rows, `[[`, "attn_frac"),
+    token_frac = sapply(rows, function(r)
+      if (is.null(r$token_frac)) NA_real_ else r$token_frac),
+    tau_ffn    = sapply(rows, function(r)
+      if (is.null(r$tau_ffn))  NA_real_ else r$tau_ffn),
+    tau_attn   = sapply(rows, function(r)
+      if (is.null(r$tau_attn)) NA_real_ else r$tau_attn),
+    comp_ms    = sapply(rows, function(r)
+      if (is.null(r$comp_ms))  NA_real_ else r$comp_ms),
+    comp_mb    = sapply(rows, function(r)
+      if (is.null(r$comp_mb))  NA_real_ else r$comp_mb)
+  )
+}
+
+sweep <- bind_rows(lapply(names(res$lambda_sweep), sweep_df)) |>
+  mutate(variant = factor(variant,
+                          levels = intersect(variant_levels, unique(variant))))
+
+dense_ppl <- res$test_ppl$dense
+
+# Add λ=0 anchor (all units active = dense performance) to each variant so
+# response curves start at the origin rather than the first grid point.
+stoch_sweep <- filter(sweep, variant != "dense")
+lam0_rows <- stoch_sweep |>
+  group_by(variant) |> slice(1) |> ungroup() |>
+  mutate(lam = 0, ppl = dense_ppl, ppl_std = 0,
+         ffn_frac = 1, attn_frac = 1, token_frac = 1,
+         tau_ffn = NA_real_, tau_attn = NA_real_,
+         comp_ms = NA_real_, comp_mb = NA_real_)
+stoch_sweep <- bind_rows(lam0_rows, stoch_sweep) |> arrange(variant, lam)
+
+# Monotone spline interpolation for smooth response curves
+smooth_lam <- function(df, n = 300) {
+  ok <- df[is.finite(df$ppl) & df$ppl <= 3000, ]
+  if (nrow(ok) < 3) return(data.frame())
+  lam_seq <- seq(min(ok$lam), max(ok$lam), length.out = n)
+  spl     <- splinefun(ok$lam, log(ok$ppl), method = "monoH.FC")
+  data.frame(variant = df$variant[1], lam = lam_seq, ppl = exp(spl(lam_seq)))
+}
+sweep_smooth <- do.call(rbind,
+  lapply(split(stoch_sweep, stoch_sweep$variant), smooth_lam)) |>
+  mutate(variant = factor(variant, levels = levels(sweep$variant)))
+```
+
+## Lambda Response Curve
+
+We first examine how model performance changes for varying $\lambda$ values by pruning the trained model in terms of attention and FFN layers for a given $\lambda$. @fig-lambda-response shows the change in perplexity (PPL) as $\lambda$ increases from zero (dense, no pruning) to 5.0, which is near the upper end of the learned funciton. Each point is the mean perplexity averaged from 5 independent mask draws at a given $\lambda$ value; the dotted line shows the dense model performance as a benchmark.
+
+The plot shows that there is a non-linear yet reasonably smooth degradation of model performance as FFN layers and attention heads are dropped. The smoothness is driven by the B-spline function definition and the computational penalty imposed on the model's loss function.
+
+```{r}
+#| label: fig-lambda-response
+#| fig-cap: "Perplexity as a function of a given value of the sparsity budget $\\lambda$. The dashed line marks the dense baseline. Points show mean perplexity over 10 mask draws at each $\\lambda$; lines are monotone spline interpolants."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+ggplot(mapping = aes(lam, ppl)) +
+  geom_hline(yintercept = dense_ppl, linetype = "dashed",
+             colour = pal["dense"], linewidth = 0.6) +
+  annotate("text", x = 4.5, y = dense_ppl * 1.08,
+           label = "dense", colour = pal["dense"], size = 3) +
+  geom_line(data = sweep_smooth, linewidth = 0.9) +
+  geom_point(data = filter(stoch_sweep, ppl <= 3000), size = 2) +
+  #scale_y_log10(limits = c(NA, 200)) +
+  xlim(c(0, 5)) +
+  labs(x = expression(lambda ~ "(larger = sparser)"),
+       y = "Perplexity (log scale)",
+       colour = NULL) +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+## Active Unit Fractions
+
+To make it clear how the $\lambda$ function drives structured pruning, @fig-active-frac shows the proportion of FFN neurons (solid lines) and attention heads (dashed lines) that survive pruning at each $\lambda$ level. These parameters only survive if they are selected by the mask $m_i$ for a given $\lambda$.
+
+```{r}
+#| label: fig-active-frac
+#| fig-cap: "Solid lines show the fraction of FFN neurons retained; dashed lines show the fraction of attention heads retained. The FLOP-weighted penalty causes attention heads to be pruned more conservatively than FFN neurons at equivalent $\\lambda$ values."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+frac_long <- stoch_sweep |>
+  select(variant, lam, ffn_frac, attn_frac) |>
+  pivot_longer(c(ffn_frac, attn_frac),
+               names_to  = "component",
+               values_to = "active_frac") |>
+  mutate(component = recode(component,
+                            ffn_frac  = "FFN neurons",
+                            attn_frac = "Attention heads"))
+
+ggplot(frac_long, aes(lam, active_frac * 100,
+                      linetype = component)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.8) +
+  scale_colour_manual(values = pal) +
+  scale_linetype_manual(values = c("FFN neurons"      = "solid",
+                                   "Attention heads"  = "dashed")) +
+  expand_limits(x = 0) +
+  labs(x = expression(lambda),
+       y = "Active units (%)",
+       colour = NULL, linetype = NULL) +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+## Sampling Error
+
+The stochastic nature of the mask $m_i$ means that as the model becomes more sparse, there is residual error in terms of which layers are kept in the model. @fig-stability shows the mean and range of perplexity across 30 independent mask draws at the average value of $\lambda$ from the training runs (approximately 3). While this error does exist, it is within reasonable bounds even at the relatively high value of $\lambda=3$.
+
+```{r}
+#| label: fig-stability
+#| fig-cap: "Distribution of perplexity across mask draws at the training-mean $\\lambda \\approx 3$, modelled as a Normal density $\\mathcal{N}(\\text{ppl\\_mean}, \\text{ppl\\_std})$ whose mean and standard deviation are estimated from 30 independent resamples."
+#| fig-width: 6
+#| fig-height: 4
+#| warning: false
+
+stab_rows <- lapply(names(res$resample_stability), function(v) {
+  s   <- res$resample_stability[[v]]
+  std <- if (isTRUE(s$deterministic) || is.null(s$ppl_std)) 0 else s$ppl_std
+  data.frame(variant = v, ppl_mean = s$ppl_mean, ppl_std = std)
+})
+stab <- bind_rows(stab_rows) |>
+  filter(variant %in% c("rank1_hyper_joint", "rank1_hyper_ffn"), ppl_std > 0) |>
+  mutate(variant = factor(variant,
+                          levels = intersect(variant_levels, unique(variant))))
+
+# Model each variant's resample perplexity as a Normal N(ppl_mean, ppl_std) and
+# evaluate its density on a shared grid spanning ±4 SD.
+x_lo   <- min(stab$ppl_mean - 4 * stab$ppl_std)
+x_hi   <- max(stab$ppl_mean + 4 * stab$ppl_std)
+x_grid <- seq(x_lo, x_hi, length.out = 400)
+dens   <- do.call(rbind, lapply(seq_len(nrow(stab)), function(i) {
+  data.frame(variant = stab$variant[i],
+             ppl     = x_grid,
+             density = dnorm(x_grid, mean = stab$ppl_mean[i], sd = stab$ppl_std[i]))
+}))
+dens$variant <- factor(dens$variant, levels = levels(stab$variant))
+
+ggplot(dens, aes(ppl, density), fill = "blue",colour="dark blue") +
+  geom_area(position = "identity", alpha = 0.25, colour = NA) +
+  geom_line(linewidth = 0.9) +
+  geom_vline(data = stab, aes(xintercept = ppl_mean),
+             linetype = "dashed", linewidth = 0.5, show.legend = FALSE) +
+  labs(x = "Perplexity", y = "Density", colour = NULL, fill = NULL) +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+## Learned Threshold Behaviour
+
+@fig-tau shows how the learned threshold $\tau(\lambda)$ changes in response to $\lambda$, revealing a similar non-linear yet smooth pattern. Importantly, this plot does not show any performance changes but rather shows the internal model relationship between the penalty $\lambda$ and the inclusion factor $\tau$, which ultimately determines how many neurons survive (given their importance).
+
+```{r}
+#| label: fig-tau
+#| fig-cap: "Learned inclusion threshold $\\tau$ vs $\\lambda$."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+tau_long <- stoch_sweep |>
+  pivot_longer(c(tau_ffn, tau_attn),
+               names_to  = "component",
+               values_to = "tau") |>
+  filter(!is.na(tau)) |>
+  mutate(component = recode(component,
+                            tau_ffn  = "FFN",
+                            tau_attn = "Attention"))
+
+ggplot(tau_long, aes(lam, tau, linetype = component)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2) +
+  scale_linetype_manual(values = c("FFN" = "solid", "Attention" = "dashed")) +
+  expand_limits(x = 0) +
+  labs(x = expression(lambda ~ "(larger = sparser budget)"),
+       y = expression(tau ~ "(inclusion threshold)"),
+       colour = NULL, linetype = NULL) +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+## Compression–Quality Frontier
+
+Finally, @fig-frontier shows the trade-off between model size (in MB after pruning either FFN layers or attention heads) and PPL. Each line traces the size and PPL performance of the two model variants given $\lambda$ values. As can be seen, the model can be compressed from 5 GB to approximately 1.3 GB before PPL performance decreases dramatically, showing the power of the algorithm at identifying reasonably performant sub-networks at very high sparsity.
+
+```{r}
+#| label: fig-frontier
+#| fig-cap: "**Compression–quality frontier.** Perplexity vs compressed model size (MB) after physical removal of pruned rows and columns. The curve traces `hyper_joint` across $\\lambda$ values; point size scales with $\\lambda$. The vertical dashed line marks the dense model size. Lower-left is better."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+dense_size_row <- Filter(function(r) r$variant == "dense",
+                         res$size_comparison)[[1]]
+dense_comp_mb  <- if (!is.null(dense_size_row$comp_mb))
+  dense_size_row$comp_mb else NA_real_
+
+size_eff <- stoch_sweep |>
+  filter(!is.na(comp_mb), !is.na(ppl), ppl <= 500) |>
+  select(variant, lam, ppl, comp_mb)
+
+ggplot(size_eff, aes(comp_mb, ppl)) +
+  geom_path(aes(group = variant), linewidth = 0.9, alpha = 0.7) +
+  geom_point(aes(size = lam), alpha = 0.85) +
+  { if (!is.na(dense_comp_mb))
+      list(
+        geom_vline(xintercept = dense_comp_mb, linetype = "dashed",
+                   colour = pal["dense"], linewidth = 0.6),
+        annotate("text", x = dense_comp_mb, y = Inf, vjust = 1.5, hjust = -0.1,
+                 label = "dense", colour = pal["dense"], size = 3)
+      )
+  } +
+  scale_y_log10() +
+  #scale_colour_manual(values = pal) +
+  scale_size_continuous(name = expression(lambda), range = c(1.5, 4)) +
+  labs(x = "Compressed model size (MB)",
+       y = "Perplexity (log scale)",
+       colour = NULL) +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+## Inference Speedup
+
+In order to make the compression figures concrete, @fig-speedup calculates the actual evaluation speedup of compressing the push puppet network on an Intel Data Center Max GPU (48 GB RAM). As can be seen, for this model the computational speed-ups max out at about 4x around a $\lambda$ value of 1.5. The speed-ups do not increase above this value mainly because the model has become so small that additional speed-ups are not computationally noticeable.
+
+Nonetheless, it is important to note that these speedups were actualized on realistic hardware. In order to handle the irregularly-sized weight matrices post-pruning, the `pytorch` `torch.compile` function was used to create optimal matrix multiplication code. While a custom kernel might show even better performance, we note that a 4x speedup on a small model is a significant improvement, and at $\lambda=1.5$ the model has increased in PPL by only 30%.
+
+```{r}
+#| label: cmp-setup
+#| message: false
+#| warning: false
+
+library(jsonlite)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+cmp          <- fromJSON("../results/olmo3_mini1b_all/compression_comparison.json", simplifyDataFrame = TRUE)
+dense_mb_ref <- cmp$dense_mb
+dense_ppl    <- cmp$dense_ppl
+
+rows <- as.data.frame(cmp$results) |>
+  filter(ppl <= 3000) |>
+  mutate(
+    method = factor(method,
+                    levels = c("dense", "sparsegpt", "wanda", "tau-hyper_joint")),
+    lam    = as.numeric(lam)
+  )
+
+pal_cmp <- c(
+  "dense"           = "#555555",
+  "sparsegpt"       = "#2166ac",
+  "wanda"           = "#d6604d",
+  "tau-hyper_joint" = "#e08214"
+)
+```
+
+```{r}
+#| label: fig-speedup
+#| fig-cap: "Speedup of the compiled push puppet sub-network versus the compiled dense baseline (dashed line at 1×) at each evaluated $\\lambda$. Points are sized by $\\lambda$. The right-hand axis shows the physically compressed model size in MB."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+speed_rows <- as.data.frame(cmp$results) |>
+  filter(method == "tau-hyper_joint",
+         !is.na(speedup), !is.na(actual_mb)) |>
+  mutate(lam = as.numeric(lam),
+         speedup = as.numeric(speedup),
+         actual_mb = as.numeric(actual_mb))
+
+ggplot(speed_rows, aes(lam, speedup)) +
+  geom_hline(yintercept = 1, linetype = "dashed",
+             colour = "#555555", linewidth = 0.6) +
+  annotate("text", x = max(speed_rows$lam) * 0.95, y = 1.02,
+           label = "dense baseline", colour = "#555555", size = 3, hjust = 1) +
+  geom_line(colour = pal_cmp["tau-hyper_joint"], linewidth = 0.9) +
+  geom_point(aes(size = lam),
+             colour = pal_cmp["tau-hyper_joint"], alpha = 0.85) +
+  geom_text(aes(label = sprintf("%.0f MB", actual_mb)),
+            vjust = -0.9, size = 2.8, colour = "#444444") +
+  scale_size_continuous(name = expression(lambda), range = c(2, 5)) +
+  scale_y_continuous(limits = c(0.95, NA),
+                     labels = function(x) paste0(x, "×")) +
+  labs(x = expression(lambda ~ "(larger = sparser)"),
+       y = "Speedup over dense (compiled)") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+## Comparison with Wanda and SparseGPT
+
+In this section, I compare the $\lambda$-based sub-network sampling against SparseGPT [@frantar2023] and Wanda [@sun2024] in terms of compression and model performance relative to the dense model, i.e., $\lambda=0$. Wanda and SparseGPT are evaluated at 20 unstructured sparsity levels from 5% to 99% applied to the dense model with $\lambda=0$ (i.e. fully dense); the model is then swept over $\lambda$ values from 0 to 5. @fig-comparison-size and @fig-comparison-flops show the performance of these different methods in terms of the PPL cost over baseline and the relative memory and computation savings relative to each other and the dense model.
+
+```{r}
+#| label: fig-comparison-size
+#| fig-cap: "Each curve traces one method across its compression range. For SparseGPT and Wanda, x-axis is the non-zero-weight size at sparsity $s$ (i.e., $(1-s) \\times$ dense MB assuming sparse storage). For the push puppet method, x-axis is the physically compressed size after structural row/column removal. Points with PPL > 3,000 (model collapse) are excluded. Lower-left is better."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+tau_rows  <- filter(rows, method == "tau-hyper_joint")
+base_rows <- filter(rows, method != "tau-hyper_joint" & method != "dense")
+
+ggplot() +
+  geom_vline(xintercept = dense_mb_ref, linetype = "dashed",
+             colour = pal_cmp["dense"], linewidth = 0.5) +
+  annotate("text", x = dense_mb_ref, y = Inf, vjust = 1.5, hjust = -0.1,
+           label = "dense", colour = pal_cmp["dense"], size = 3) +
+  geom_line(data  = base_rows,
+            aes(size_mb, ppl, colour = method), linewidth = 0.9) +
+  geom_point(data = base_rows,
+             aes(size_mb, ppl, colour = method), size = 1.4, alpha = 0.7) +
+  geom_line(data  = tau_rows,
+            aes(size_mb, ppl, colour = method), linewidth = 0.9) +
+  geom_point(data = tau_rows,
+             aes(size_mb, ppl, colour = method, size = lam), alpha = 0.85) +
+  scale_colour_manual(values = pal_cmp, name = NULL,
+                      labels = c(sparsegpt = "SparseGPT", wanda = "Wanda",
+                                 "tau-hyper_joint" = "Self-destructing")) +
+  scale_size_continuous(name = expression(lambda), range = c(1, 3.5)) +
+  scale_y_log10() +
+  labs(x = "Model size (MB, sparse or structural)",
+       y = "Perplexity (log scale)") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom", legend.box = "horizontal")
+```
+
+```{r}
+#| label: fig-comparison-flops
+#| fig-cap: "For SparseGPT and Wanda, FLOPs fraction equals $(1 - s)$ at unstructured sparsity $s$, assuming ideal sparse execution. For the push puppet method, FLOPs are computed from the FLOP-weighted mean of surviving FFN neurons and attention heads."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+ggplot() +
+  geom_vline(xintercept = 1.0, linetype = "dashed",
+             colour = pal_cmp["dense"], linewidth = 0.5) +
+  annotate("text", x = 1.0, y = Inf, vjust = 1.5, hjust = -0.1,
+           label = "dense", colour = pal_cmp["dense"], size = 3) +
+  geom_line(data  = base_rows,
+            aes(flops_frac, ppl, colour = method), linewidth = 0.9) +
+  geom_point(data = base_rows,
+             aes(flops_frac, ppl, colour = method), size = 1.4, alpha = 0.7) +
+  geom_line(data  = tau_rows,
+            aes(flops_frac, ppl, colour = method), linewidth = 0.9) +
+  geom_point(data = tau_rows,
+             aes(flops_frac, ppl, colour = method, size = lam), alpha = 0.85) +
+  scale_colour_manual(values = pal_cmp, name = NULL,
+                      labels = c(sparsegpt = "SparseGPT", wanda = "Wanda",
+                                 "tau-hyper_joint" = "Self-destructing")) +
+  scale_size_continuous(name = expression(lambda), range = c(1, 3.5)) +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_log10() +
+  labs(x = "FLOPs (% of dense)",
+       y = "Perplexity (log scale)") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom", legend.box = "horizontal")
+```
+
+As can be seen, Wanda and SparseGPT out-perform the push puppet method at low levels of sparsity, while the push puppet outperforms at higher levels of sparsity. While the threshold will depend on the particular model, it would seem that the push puppet method dominates above 50% sparsity while the Wanda and SparseGPT have better performance at lower levels of sparsity (i.e., relatively dense models).
+
+However, it is important to note that SparseGPT and Wanda are unstructured pruning methods; i.e., they will zero out particular neurons in the network regardless of where they are situated. While this approach is very granular, it does not result in actual computation savings in many cases because GPU kernels cannot handle sparse matrices. A notable exception is Nvidia's support for 2:4 sparsity levels in which 2 out of every 4 coefficients are zeroed out; otherwise, these methods' sparsity savings are theoretical.
+
+By contrast, the push puppet $\lambda$ function uses structured pruning of specific rows in weight matrices (as shown in the previous section) so that the savings in terms of memory size and computation can be utilized without using custom kernels. Furthermore, the push puppet method can be implemented without loading a model into memory by sampling neurons at a given $\lambda$ level and then loading those specific weight matrices; sparseGPT and Wanda require the model to be loaded in-memory in order to calculate pruning. In addition, it is important to note that the push puppet method can be fruitfully combined with sparseGPT in which a push puppet model can be first trimmed with sparseGPT to the 2:4 sparsity ratio and then further pruned using $\lambda$ to achieve even greater sparsity.
+
+## Speculative Decoding
+
+The push puppet method is particularly suited for making candidate models for speculative decoding [@leviathan2023] because push puppet sampled sub-networks are derived from the same model architecture as the dense (acceptance) model used for decoding. For this reason, the push puppet method can maintain high acceptance rates even at high structured sparsity levels, which permits good speculative speed-ups.
+
+I first measure speculative performance by sampling sub-networks for varying $\lambda$ and using the dense model $\lambda=0$ as the acceptance model. @fig-speculative-measured reports the *measured* end-to-end decoding speedup on an Intel Data Center Max (PVC) GPU with $\gamma=4$ draft tokens per round. Each point is the mean generation throughput over three trials relative to the dense baseline; points are coloured by the measured token acceptance rate. As $\lambda_{\text{draft}}$ rises the draft becomes cheaper but performance degrades, so the acceptance rate falls with increasing sparsity. For these reasons, the speedup decreases as $\lambda$ increases and acceptance rates for proposals fall, though the speedup remains at around 2x even for only 20% of parameters remaining in the model. Furthermore, while the speed-up is 3x at very lower sparsity, it should be noted that this essentially amounts to running the model in parallel because the GPU has more than enough RAM to hold two full copies of the model. For these reasons, the 2x speed-up at high sparsity of 20% is the more interesting and potentially useful speed-up that could translate into production scenarios.
+
+```{r}
+#| label: spec-measured-setup
+#| message: false
+#| warning: false
+
+# Measured end-to-end generative sweep, produced on the cluster by
+# scripts/submit_benchmark_speculative.sh (MODE=sweep), which runs:
+#   python python/benchmark_speculative.py --mode sweep --model_type olmo3 \
+#     --ckpt_dir <ckpt> --tokenizer_dir <tok> --device xpu --lam_target 0.0 \
+#     --lam_draft_max 3.0 --gamma 4 --n_trials 3 --csv <out>.csv
+specm_csv  <- "../results/olmo3_mini1b_all/speculative_decode.csv"
+specm_have <- file.exists(specm_csv)
+
+if (specm_have) {
+  specm <- read.csv(specm_csv, stringsAsFactors = FALSE)
+  if ("mode" %in% names(specm)) specm <- specm[specm$mode == "sweep", ]
+  specm <- specm[order(specm$lam_draft), ]
+}
+```
+
+```{r}
+#| label: fig-speculative-measured
+#| eval: !expr specm_have
+#| fig-cap: "Measured decoding speedup of the push puppet sub-network with the dense ($\\lambda=0$) target, on an Intel Data Center Max GPU with $\\gamma=4$ draft tokens per round. Speedup is generation throughput relative to the naive autoregressive baseline (dashed line at $1\\times$)."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+ggplot(specm, aes(param_ratio, speedup)) +
+  geom_hline(yintercept = 1, linetype = "dashed",
+             colour = "#555555", linewidth = 0.6) +
+  annotate("text", x = 0.5, y = 1.06,
+           label = "no speedup", colour = "#555555", size = 3, hjust = 1) +
+  geom_line(colour = pal_cmp["tau-hyper_joint"], linewidth = 0.9) +
+  geom_point(aes(colour = accept_rate), size = 3) +
+  scale_colour_viridis_c(name = "Acceptance rate",
+                         option = "C", end = 0.9, limits = c(0.45, 1)) +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(labels = function(x) paste0(x, "×")) +
+  labs(x = "% Parameters Remaining",
+       y = "Speedup over baseline") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+<!-- Additionally, @fig-speculative-measured is based on a conventional speculative set-up per @leviathan2023 in which the proposal model and the acceptance model are completely separate. This framework though is not necessarily optimal for the push puppet method given that the models are derived from same architecture and hence the proposer and decoder can share some model features. For example, the EAGLE framework [@li2026] has shown that speculative decoding across model layers can be significantly more efficient than decoding across completely different models. The push puppet method can also make use of this method of decoding because the draft and target share. the same set of weights
+
+To illustrate this performance increase, @fig-speculative compares the standard single decoder/single proposer against *tree-speculative* decoding in which *multiple* proposals are loaded into memory with one shared weight space in GPU RAM. This approach can make use of the push puppet method's ability to make many sub-networks of a given size, saturating RAM and thus increasing speed-ups up to hardware constraints. @fig-speculative shows estimates of these projected speed-ups for a varying number of proposal models $K$ and of varying size in terms of pruned FFN layers.
+
+These estimates are *semi-empirical* rather than fully theoretical: for every $\lambda_{\text{draft}}$ the token acceptance rate is measured directly from the model's forward passes—the exact distributional overlap $\alpha = \sum_x \min \big(p(x), q(x)\big) = 1 - \text{TV}(p, q)$ between draft and target—while only the per-pass *cost* is modelled, with the candidate count $K$ following from the memory budget and the optimal $\gamma$ selected per round. The quantity hardest to predict (acceptance) is therefore real; only the wall-clock cost is approximated.
+
+The results in @fig-speculative show that shared-weight tree-speculation can increase performance up to 3x when loading multiple push puppet sub-networks and when FFN pruning for the sub-networks is below 70%. Again, performance saturates at approximately 3x, and this figure represents a theoretical rather than actual speed-up given that performance will vary in terms of the specific task. Nonetheless, the plot shows how more recent approaches to speculative decoding can work quite well with the push puppet sub-network method.
+
+```{r}
+#| label: spec-setup
+#| message: false
+#| warning: false
+
+# CSV produced on the cluster by scripts/submit_ram_budget.sh, which runs:
+#   python python/benchmark_speculative.py --mode ram_budget --model_type olmo3 \
+#     --ckpt_dir <ckpt> --tokenizer_dir <tok> --device xpu --lam_target 0.0 \
+#     --budget_gb 48 --kv_seq_len 2048 --lam_draft_max 3.0 --csv <out>.csv
+# Semi-empirical multi-draft speedup under a fixed GPU memory budget: acceptance
+# rates (alpha) are MEASURED from real forward passes (exact TV overlap); only
+# the per-pass cost is modelled (active-FLOP ratio, not timed), and the cost
+# model picks the optimal gamma per round for each operating point.
+spec_csv  <- "../results/olmo3_mini1b_all/speculative_ram_budget.csv"
+spec_have <- file.exists(spec_csv)
+
+if (spec_have) {
+  spec_raw <- read.csv(spec_csv, stringsAsFactors = FALSE)
+  spec_raw <- spec_raw[spec_raw$lam_draft >= 0.05, ]
+  spec_raw <- spec_raw[order(spec_raw$lam_draft), ]
+
+  spec <- spec_raw |>
+    transmute(lam_draft, ffn_active, alpha,
+              single   = speedup_single,
+              selfspec = speedup_selfspec) |>
+    pivot_longer(c(single, selfspec),
+                 names_to = "method", values_to = "speedup") |>
+    mutate(method = factor(method, levels = c("selfspec", "single")))
+
+  spec_alpha_lo <- min(spec_raw$alpha)
+  spec_peak     <- max(spec_raw$speedup_selfspec)
+}
+```
+
+```{r}
+#| label: fig-speculative
+#| eval: !expr spec_have
+#| fig-cap: "**Projected self-speculative decoding from a single checkpoint.** Projected decoding speedup under a fixed 48 GB memory budget as the draft sparsity $\\lambda_{\\text{draft}}$ is swept against the dense ($\\lambda=0$) target, comparing a single draft against $K$ shared-weight self-speculative candidates (one weight load per step). Speedups combine token-acceptance rates measured from the model's forward passes with a FLOP-based cost model that selects the optimal draft length $\\gamma$ per round; the dashed line marks no speedup. Self-speculation amortises many diverse candidates over a single weight load and reaches $\\approx 3.5\\times$, roughly doubling the single-draft speedup."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+ggplot(spec, aes(lam_draft, speedup, colour = method)) +
+  geom_hline(yintercept = 1, linetype = "dashed",
+             colour = "#555555", linewidth = 0.6) +
+  annotate("text", x = min(spec$lam_draft), y = 1.12,
+           label = "no speedup", colour = "#555555", size = 3, hjust = 0) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.4) +
+  scale_colour_manual(
+    values = c(selfspec = "#e08214", single = "#2166ac"),
+    labels = c(selfspec = "Self-speculative (shared-weight drafts)",
+               single   = "Single draft"),
+    name = NULL) +
+  scale_x_log10() +
+  scale_y_continuous(labels = function(x) paste0(x, "×")) +
+  labs(x = expression(lambda[draft] ~ "(larger = sparser draft)"),
+       y = "Projected speedup over baseline") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+#| label: fig-speculative-heat
+#| eval: !expr spec_have
+#| fig-cap: "**Projected self-speculative speedup across draft sparsity and candidate count.** Each cell gives the cost-model speedup for a self-speculative draft with a given FFN-active fraction (rows) and number of shared-weight candidates $K$ (columns), verifying against the dense target. The per-draft acceptance rate and FLOP cost are taken from the measured budget sweep at each sparsity level; only $K$ is varied, and the reconstruction reproduces @fig-speculative exactly at the budget-feasible $K$. Bright cells (high speedup) require both a sparse, cheap draft and $K \\gtrsim 8$ candidates; beyond that the gain saturates."
+#| fig-width: 7
+#| fig-height: 4.5
+#| warning: false
+
+# Re-evaluate the self-speculative cost model (draft_passes = 1, gamma_max = 64)
+# over a grid of candidate counts K at each measured draft sparsity. alpha and c
+# are the measured/derived inputs from the budget sweep; only K is varied.
+.best_gamma_speedup <- function(alpha_eff, c, gamma_max = 64) {
+  g    <- 1:gamma_max
+  toks <- if (alpha_eff >= 1 - 1e-9) g + 1 else (1 - alpha_eff^(g + 1)) / (1 - alpha_eff)
+  max(toks / (g * c + 1))
+}
+
+heat <- expand.grid(i = seq_len(nrow(spec_raw)), K = 1:64)
+heat$ffn     <- spec_raw$ffn_active[heat$i]
+heat$speedup <- mapply(function(i, K)
+  .best_gamma_speedup(1 - (1 - spec_raw$alpha[i])^K, spec_raw$c[i]),
+  heat$i, heat$K)
+heat$ffn_lab <- factor(sprintf("%.1f", heat$ffn * 100),
+                       levels = sprintf("%.1f", sort(unique(spec_raw$ffn_active)) * 100))
+
+ggplot(heat, aes(K, ffn_lab, fill = speedup)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "C", name = "Projected\nspeedup",
+                       labels = function(x) paste0(x, "×")) +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(x = "K  (shared-weight draft candidates)",
+       y = "FFN active in draft (%)") +
+  theme_bw(base_size = 11)
+``` -->
+
+## Discussion
+
+This paper presents the push puppet network method for structural pruning of large language models. It is evaluated based on a deep neural network architecture using @olmo2026, and thus is comparable to models used currently in production. At the same time, the method as presented must be incorporated during model training, and thus the results are shown for a model of smaller size and without many of the intensive post-training enhancements such as reinforcement learning.
+
+It is certainly possible to consider learning a $\lambda-\tau$ function during a post-training re-estimation phase, but that is beyond the scope of this paper. What is clear is that the Bayesian hyper-function can learn how to decompose a network into remarkably stable sub-networks, and that these sub-networks can be used for sparse computation and for speculative decoding.
+
+{{< pagebreak >}}
+
+# References
