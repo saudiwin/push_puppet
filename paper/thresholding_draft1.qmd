@@ -2,7 +2,7 @@
 title: "Push Puppet Networks"
 subtitle: "A Structured Bayesian Pruning Algorithm for Language Model Compression"
 short-title: Push Puppet Networks
-published: "Preprint"
+published: "Preprint - June 25, 2026"
 code-repo: "Access the code, data, and analysis at <https://github.com/saudiwin/push_puppet>."
 correspondence-prefix: "Correspondence concerning this article should be addressed to"
 author:
