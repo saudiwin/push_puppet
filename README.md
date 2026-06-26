@@ -5,18 +5,29 @@ prior over a computational-cost parameter λ) that allows sub-network sampling t
 
 This repository holds the code that produces the results and figures in the
 working paper *Push Puppet Networks: A Structured Bayesian Pruning Algorithm for
-Language Model Compression* (`paper/thresholding_draft1.qmd`).
+Language Model Compression* (`paper/thresholding_draft1.qmd`) as a Quarto file. To install Quarto, see this website: https://quarto.org/docs/download/.
 
 ## Layout
 
 ```
+results/ JSON/CSV output for paper & saved model checkpoint (`model.pt`)
 python/    Model training, evaluation, and benchmarking scripts
 scripts/   SLURM submission wrappers that run the python/ scripts on a cluster
 ```
 
 The pipeline involves training a fitted OLMO-3 deep neural network with a $\lambda$ function for sparsity, then run the three
 evaluation scripts to obtain paper plots and results. Each evaluation script writes a JSON or CSV
-results file that the paper's R/Quarto code reads to render a figure.
+results file to the `results/olmo3_mini1b_all` folder that the paper's R/Quarto code reads to render a figure.
+
+A saved Olmo-3 checkpoint can also be placed in the `results/olmo3_mini1b_all` folder to assist with reproducing the paper's results without re-training the model. The saved checkpoint file `model.pt` can be downloaded separately from the following link: <https://www.dropbox.com/scl/fi/gt0y7kt9fiujnlul8xqpt/model.pt?rlkey=50l3sxyoq5ryv7talvy1byfhj&st=d3k06oei&dl=0>.
+
+**Note that the paper quarto .qmd file uses the hikmah extension for formatting.**
+
+To install this extension, execute the following command in the `paper` sub-directory:
+
+```
+quarto add andrewheiss/hikmah-academic-quarto
+```
 
 ## Environment
 

@@ -2,14 +2,18 @@
 __pycache__/
 *.py[codz]
 *$py.class
+_extensions
 
 .DS_Store
-
+.quarto
 # C extensions
 *.so
 
+model.pt
+
 # Distribution / packaging
 .Python
+
 build/
 develop-eggs/
 dist/

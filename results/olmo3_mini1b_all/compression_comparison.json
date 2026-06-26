@@ -1,0 +1,611 @@
+{
+  "dense_mb": 5117.91744,
+  "dense_ppl": 63.73658860959108,
+  "results": [
+    {
+      "method": "dense",
+      "size_mb": 5117.91744,
+      "flops_frac": 1.0,
+      "ppl": 63.73658860959108,
+      "sparsity": null,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 4902.690816,
+      "flops_frac": 0.95,
+      "ppl": 63.742805287067746,
+      "sparsity": 0.05,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 4688.519168,
+      "flops_frac": 0.9,
+      "ppl": 63.73003674073869,
+      "sparsity": 0.1,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 4472.905728,
+      "flops_frac": 0.85,
+      "ppl": 63.80023593531442,
+      "sparsity": 0.15000000000000002,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 4258.73408,
+      "flops_frac": 0.8,
+      "ppl": 63.78133460829093,
+      "sparsity": 0.2,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 4042.989568,
+      "flops_frac": 0.75,
+      "ppl": 64.01769146961324,
+      "sparsity": 0.25,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 3828.948992,
+      "flops_frac": 0.7,
+      "ppl": 64.15405700760633,
+      "sparsity": 0.3,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 3614.777344,
+      "flops_frac": 0.6499999999999999,
+      "ppl": 64.13069338063907,
+      "sparsity": 0.35000000000000003,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 3399.163904,
+      "flops_frac": 0.6,
+      "ppl": 64.59273018561008,
+      "sparsity": 0.4,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 3184.992256,
+      "flops_frac": 0.55,
+      "ppl": 65.56407265886047,
+      "sparsity": 0.45,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 2969.247744,
+      "flops_frac": 0.5,
+      "ppl": 66.94157402692193,
+      "sparsity": 0.5,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 2755.207168,
+      "flops_frac": 0.44999999999999996,
+      "ppl": 70.57969194212322,
+      "sparsity": 0.55,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 2541.03552,
+      "flops_frac": 0.3999999999999999,
+      "ppl": 74.77465199679905,
+      "sparsity": 0.6000000000000001,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 2325.42208,
+      "flops_frac": 0.34999999999999987,
+      "ppl": 82.50084042535569,
+      "sparsity": 0.6500000000000001,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 2111.250432,
+      "flops_frac": 0.29999999999999993,
+      "ppl": 92.95248703056957,
+      "sparsity": 0.7000000000000001,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 1895.50592,
+      "flops_frac": 0.2499999999999999,
+      "ppl": 117.12782028577251,
+      "sparsity": 0.7500000000000001,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 1681.465344,
+      "flops_frac": 0.19999999999999996,
+      "ppl": 181.21227119800986,
+      "sparsity": 0.8,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 1467.293696,
+      "flops_frac": 0.1499999999999999,
+      "ppl": 405.96211091693954,
+      "sparsity": 0.8500000000000001,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 1251.680256,
+      "flops_frac": 0.09999999999999987,
+      "ppl": 2065.622696548488,
+      "sparsity": 0.9000000000000001,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 1037.508608,
+      "flops_frac": 0.04999999999999993,
+      "ppl": 12606.413650027498,
+      "sparsity": 0.9500000000000001,
+      "lam": null
+    },
+    {
+      "method": "sparsegpt",
+      "size_mb": 865.542144,
+      "flops_frac": 0.010000000000000009,
+      "ppl": 485165195.4097903,
+      "sparsity": 0.99,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 4902.690816,
+      "flops_frac": 0.95,
+      "ppl": 63.75710710175003,
+      "sparsity": 0.05,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 4688.519168,
+      "flops_frac": 0.9,
+      "ppl": 63.82296393694161,
+      "sparsity": 0.1,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 4472.905728,
+      "flops_frac": 0.85,
+      "ppl": 63.958331867517984,
+      "sparsity": 0.15000000000000002,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 4258.73408,
+      "flops_frac": 0.8,
+      "ppl": 64.17790164568372,
+      "sparsity": 0.2,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 4042.989568,
+      "flops_frac": 0.75,
+      "ppl": 64.5425161049611,
+      "sparsity": 0.25,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 3828.948992,
+      "flops_frac": 0.7,
+      "ppl": 64.99631946048072,
+      "sparsity": 0.3,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 3614.777344,
+      "flops_frac": 0.6499999999999999,
+      "ppl": 65.98749792158607,
+      "sparsity": 0.35000000000000003,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 3399.163904,
+      "flops_frac": 0.6,
+      "ppl": 68.49856111124166,
+      "sparsity": 0.4,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 3184.992256,
+      "flops_frac": 0.55,
+      "ppl": 72.28736540991399,
+      "sparsity": 0.45,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 2969.247744,
+      "flops_frac": 0.5,
+      "ppl": 80.6399390965991,
+      "sparsity": 0.5,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 2755.207168,
+      "flops_frac": 0.44999999999999996,
+      "ppl": 98.39852293039374,
+      "sparsity": 0.55,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 2541.03552,
+      "flops_frac": 0.3999999999999999,
+      "ppl": 137.9755587641746,
+      "sparsity": 0.6000000000000001,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 2325.42208,
+      "flops_frac": 0.34999999999999987,
+      "ppl": 263.5493097467066,
+      "sparsity": 0.6500000000000001,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 2111.250432,
+      "flops_frac": 0.29999999999999993,
+      "ppl": 963.7318327458865,
+      "sparsity": 0.7000000000000001,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 1895.50592,
+      "flops_frac": 0.2499999999999999,
+      "ppl": 6130.059468755158,
+      "sparsity": 0.7500000000000001,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 1681.465344,
+      "flops_frac": 0.19999999999999996,
+      "ppl": 359961.15845756966,
+      "sparsity": 0.8,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 1467.293696,
+      "flops_frac": 0.1499999999999999,
+      "ppl": 485165195.4097903,
+      "sparsity": 0.8500000000000001,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 1251.680256,
+      "flops_frac": 0.09999999999999987,
+      "ppl": 485165195.4097903,
+      "sparsity": 0.9000000000000001,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 1037.508608,
+      "flops_frac": 0.04999999999999993,
+      "ppl": 485165195.4097903,
+      "sparsity": 0.9500000000000001,
+      "lam": null
+    },
+    {
+      "method": "wanda",
+      "size_mb": 865.542144,
+      "flops_frac": 0.010000000000000009,
+      "ppl": 485165195.4097903,
+      "sparsity": 0.99,
+      "lam": null
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 4879.6953125,
+      "flops_frac": 0.9978699963539839,
+      "ppl": 63.76199770806397,
+      "sparsity": null,
+      "lam": 0.0,
+      "actual_mb": 5099.814912,
+      "speedup": 0.9684269430590642,
+      "ms_batch": 554.1252176044509
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 4715.6953125,
+      "flops_frac": 0.8643250381574035,
+      "ppl": 65.3042367407156,
+      "sparsity": null,
+      "lam": 0.1
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 3505.6875,
+      "flops_frac": 0.593371465569362,
+      "ppl": 68.02683139569764,
+      "sparsity": null,
+      "lam": 0.2
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1944.1171875,
+      "flops_frac": 0.4023990402929485,
+      "ppl": 71.41947409404088,
+      "sparsity": null,
+      "lam": 0.30000000000000004
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1462.0,
+      "flops_frac": 0.29858549200434936,
+      "ppl": 74.17550051896477,
+      "sparsity": null,
+      "lam": 0.4
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1338.0,
+      "flops_frac": 0.2359031715850506,
+      "ppl": 75.42034692556288,
+      "sparsity": null,
+      "lam": 0.5,
+      "actual_mb": 1821.696,
+      "speedup": 2.589994515849184,
+      "ms_batch": 207.19340804498643
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1290.671875,
+      "flops_frac": 0.19226491959261693,
+      "ppl": 76.3858089659906,
+      "sparsity": null,
+      "lam": 0.6000000000000001
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1263.046875,
+      "flops_frac": 0.16314402793335603,
+      "ppl": 76.91526778444215,
+      "sparsity": null,
+      "lam": 0.7000000000000001
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1245.328125,
+      "flops_frac": 0.1432461113853023,
+      "ppl": 77.33014834123978,
+      "sparsity": null,
+      "lam": 0.8
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1229.8125,
+      "flops_frac": 0.12854056997106778,
+      "ppl": 78.10842025723016,
+      "sparsity": null,
+      "lam": 0.9
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1203.2109375,
+      "flops_frac": 0.11729394134466875,
+      "ppl": 78.98045148576212,
+      "sparsity": null,
+      "lam": 1.0,
+      "actual_mb": 1341.947904,
+      "speedup": 3.515527026929758,
+      "ms_batch": 152.64561655931175
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1192.609375,
+      "flops_frac": 0.10887489873017347,
+      "ppl": 80.0249074066006,
+      "sparsity": null,
+      "lam": 1.1
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1178.171875,
+      "flops_frac": 0.10252296175109571,
+      "ppl": 80.95408021345028,
+      "sparsity": null,
+      "lam": 1.2000000000000002
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1159.6640625,
+      "flops_frac": 0.09760009520230478,
+      "ppl": 81.87721162403267,
+      "sparsity": null,
+      "lam": 1.3
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1146.046875,
+      "flops_frac": 0.09369562334550317,
+      "ppl": 82.43705888380292,
+      "sparsity": null,
+      "lam": 1.4000000000000001
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1136.1484375,
+      "flops_frac": 0.09054813721005733,
+      "ppl": 83.28870165847209,
+      "sparsity": null,
+      "lam": 1.5,
+      "actual_mb": 1233.846272,
+      "speedup": 3.8489713939621453,
+      "ms_batch": 139.42161051090807
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1126.2734375,
+      "flops_frac": 0.08798645141923875,
+      "ppl": 83.53895077925512,
+      "sparsity": null,
+      "lam": 1.6
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1124.5625,
+      "flops_frac": 0.08588995226297529,
+      "ppl": 84.08170808095598,
+      "sparsity": null,
+      "lam": 1.7000000000000002
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1123.1328125,
+      "flops_frac": 0.08412849659584151,
+      "ppl": 84.18882259099574,
+      "sparsity": null,
+      "lam": 1.8
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1117.9375,
+      "flops_frac": 0.08256983059127287,
+      "ppl": 84.66129838915188,
+      "sparsity": null,
+      "lam": 1.9000000000000001
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1109.2265625,
+      "flops_frac": 0.07787778089299077,
+      "ppl": 85.76148588729133,
+      "sparsity": null,
+      "lam": 2.25,
+      "actual_mb": 1189.855232,
+      "speedup": 4.001818937024755,
+      "ms_batch": 134.0964693808928
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1106.7890625,
+      "flops_frac": 0.07492185875007966,
+      "ppl": 86.31193819125528,
+      "sparsity": null,
+      "lam": 2.5
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1095.9765625,
+      "flops_frac": 0.07221667074766769,
+      "ppl": 88.3664329930131,
+      "sparsity": null,
+      "lam": 2.75
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1085.65625,
+      "flops_frac": 0.06975004172881093,
+      "ppl": 89.19263699316204,
+      "sparsity": null,
+      "lam": 3.0
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1083.59375,
+      "flops_frac": 0.06751200392504561,
+      "ppl": 90.71188636063751,
+      "sparsity": null,
+      "lam": 3.25
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1073.6953125,
+      "flops_frac": 0.06548933689290085,
+      "ppl": 91.81603814585304,
+      "sparsity": null,
+      "lam": 3.5,
+      "actual_mb": 1127.6288,
+      "speedup": 4.280235147727599,
+      "ms_batch": 125.37390401121229
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1072.4296875,
+      "flops_frac": 0.06366653760190619,
+      "ppl": 93.17926324311985,
+      "sparsity": null,
+      "lam": 3.75
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1066.6953125,
+      "flops_frac": 0.0620266524194279,
+      "ppl": 94.71595286694267,
+      "sparsity": null,
+      "lam": 4.0
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1057.4765625,
+      "flops_frac": 0.06055283571975646,
+      "ppl": 96.35732556016973,
+      "sparsity": null,
+      "lam": 4.25
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1056.1640625,
+      "flops_frac": 0.059228652940281845,
+      "ppl": 97.65215671001566,
+      "sparsity": null,
+      "lam": 4.5
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1054.9921875,
+      "flops_frac": 0.05803851560269034,
+      "ppl": 98.3375093283728,
+      "sparsity": null,
+      "lam": 4.75,
+      "actual_mb": 1101.529088,
+      "speedup": 4.394988705160329,
+      "ms_batch": 122.1003799000755
+    },
+    {
+      "method": "tau-hyper_joint",
+      "size_mb": 1049.9609375,
+      "flops_frac": 0.056967994667105955,
+      "ppl": 99.93163967342234,
+      "sparsity": null,
+      "lam": 5.0
+    }
+  ]
+}
